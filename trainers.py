@@ -97,9 +97,9 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
 
     fig, ax1 = plt.subplots(figsize=(7, 4))
     ax2 = ax1.twinx()
-    line1, = ax1.plot(train_loss_history, 'g-', label="training loss")
-    line2, = ax2.plot(val_loss_history, 'b-', label="validation loss")
-    ax1.set_xlabel('Iterations');ax1.set_ylabel('Loss')
+    line1, = ax1.plot(train_loss_history, 'g-', label="Training loss")
+    line2, = ax2.plot(val_loss_history, 'b-', label="Validation loss")
+    ax1.set_xlabel("Iterations");ax1.set_ylabel("Training loss");ax2.set_ylabel("Validation Loss")
     plt.legend(handles=[line1, line2], loc='upper right')
     plt.savefig(figpath + "/" + data_name + "_loss.png")
     plt.close()

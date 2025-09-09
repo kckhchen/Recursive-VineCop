@@ -179,7 +179,6 @@ plt.boxplot(torch.stack([torch.stack(crps).flatten(),
             orientation="horizontal", tick_labels=['Vine', 'Bicop', 'Naïve'])
 ax = plt.gca()
 ax.invert_yaxis()
-plt.title("Box plots of CRPS for different models")
 plt.savefig(folder + "/" + data_name + "_boxplots.png")
 plt.close()
 
