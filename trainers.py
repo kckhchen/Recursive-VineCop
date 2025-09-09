@@ -45,7 +45,7 @@ class EarlyStopping:
         return False
 
 def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=500, lr=0.05, patience=10, tolerance=1e-5,
-              train_prop=0.7, eta_min=0.001, figpath="./figures/", data_name="no_name"):
+              train_prop=0.7, eta_min=0.001, figpath=None, data_name=None):
     rho = torch.tensor(np.log(init_rho / (1-init_rho)), dtype=torch.float, requires_grad=True)
     optimizer = torch.optim.Adam([rho], lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_iter, eta_min=eta_min)
@@ -101,7 +101,7 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
     line2, = ax2.plot(val_loss_history, 'b-', label="validation loss")
     ax1.set_xlabel('Iterations');ax1.set_ylabel('Loss')
     plt.legend(handles=[line1, line2], loc='upper right')
-    plt.savefig(figpath + data_name + "_loss.png")
+    plt.savefig(figpath + "/" + data_name + "_loss.png")
     plt.close()
 
     return final_rho

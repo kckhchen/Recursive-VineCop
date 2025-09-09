@@ -14,47 +14,52 @@ from utils import *
 from trainers import *
 
 parser = argparse.ArgumentParser(description='Recursive-VineCop training')
-parser.add_argument('--figpath', help='Path to store figures', default="./figures/")
-parser.add_argument('--data_name', help='Name for the data, can be ar3, lorenz63, lorenz96, uwarwick_z500', default='ar3')
-parser.add_argument('--train_size', help='Training size', default=1500)
-parser.add_argument('--init_dist', help='Prior distrbution, can be Normal or Cauchy', default='Cauchy')
-parser.add_argument('--init_loc', help='Initial mean', default=0)
-parser.add_argument('--init_scale', help='Initial standard deviation', default=1)
-parser.add_argument('--init_rho', help='Initial rho value', default=0.3)
-parser.add_argument('--train_prop', help='Train_val split', default=0.7)
-parser.add_argument('--tolerance', help='Tolerance for rho optimisation early stopping', default=1e-4)
-parser.add_argument('--patience', help='Patience for rho optimisation early stopping', default=5)
-parser.add_argument('--max_iter', help='Max iterations for rho optimisation', default=500)
-parser.add_argument('--lr', help='Learning rate for rho optimisation early stopping', default=0.05)
-parser.add_argument('--n_lags', help='Prediction lead time', default=1)
-parser.add_argument('--trunc_lvl', help='Truncation level for vine copula', default=5)
-parser.add_argument('--vine_structure', help='Type of vine to use, can be C, D, or R', default='D')
-parser.add_argument('--ci', help='Confidence interval', default=0.9)
-parser.add_argument('--plot_length', help='How many observations to be shown in forecast plot', default=100)
+parser.add_argument('--data_folder', type=str, help='The folder where data are stored', default="./data")
+parser.add_argument('--data_name', type=str, help='Name for the data', default='AR3')
+parser.add_argument('--fig_folder', type=str, help='Folder to store figures', default="./figures")
+parser.add_argument('--train_size', type=int, help='Training size', default=1500)
+parser.add_argument('--init_dist', type=str, help='Prior distrbution, can be Normal or Cauchy', default='Cauchy')
+parser.add_argument('--init_loc', type=float, help='Initial mean', default=0.)
+parser.add_argument('--init_scale', type=float, help='Initial standard deviation', default=1.)
+parser.add_argument('--init_rho', type=float, help='Initial rho value', default=0.3)
+parser.add_argument('--train_prop', type=float, help='Train_val split', default=0.7)
+parser.add_argument('--max_lags', type=int, help='Maximal lags allowed for vine copula', default=10)
+parser.add_argument('--tolerance', type=float, help='Tolerance for rho optimisation early stopping', default=1e-4)
+parser.add_argument('--patience', type=int, help='Patience for rho optimisation early stopping', default=5)
+parser.add_argument('--max_iter', type=int, help='Max iterations for rho optimisation', default=500)
+parser.add_argument('--lr', type=float, help='Learning rate for rho optimisation early stopping', default=0.05)
+parser.add_argument('--n_lags', type=int, help='Prediction lead time', default=1)
+parser.add_argument('--trunc_lvl', type=int, help='Truncation level for vine copula', default=5)
+parser.add_argument('--vine_structure', type=str, help='Type of vine to use, can be C, D, or R', default='D')
+parser.add_argument('--ci', type=float, help='Confidence interval', default=0.9)
+parser.add_argument('--plot_length', type=int, help='How many observations to be shown in forecast plot', default=100)
 args = parser.parse_args()
 
 start_time = time.time()
 
-figpath =  args.figpath
+data_folder = args.data_folder
+folder =  args.fig_folder
 data_name = args.data_name
 train_size = args.train_size
 init_dist = args.init_dist
 init_loc = args.init_loc
 init_scale = args.init_scale
 init_rho = args.init_rho
+train_prop = args.train_prop
+max_lags = args.max_lags
 n_lags = args.n_lags
 trunc_lvl = args.trunc_lvl
 vine_structure = args.vine_structure
 ci = args.ci
 plot_length = args.plot_length
 
-if not os.path.exists(figpath):
-    os.makedirs(figpath)
+if not os.path.exists(folder):
+    os.makedirs(folder)
 
-data_path = "data/" + data_name + ".csv"
+data_path = data_folder + "/" + data_name + ".csv"
 
 full_dataset = pd.read_csv(data_path, index_col=0).to_numpy()
-if data_name == "lorenz96": full_dataset = full_dataset[:, 0]
+if data_name == "L96": full_dataset = full_dataset[:, 0]
 full_dataset = torch.as_tensor(full_dataset, dtype=torch.float).flatten()
 
 ## Summary plots
@@ -70,7 +75,7 @@ conf_level = 1.96 / np.sqrt(len(full_dataset))
 axes[1].axhline(y=conf_level, linestyle='--', color='blue', linewidth=1.2)
 axes[1].axhline(y=-conf_level, linestyle='--', color='blue', linewidth=1.2)
 plt.tight_layout()
-plt.savefig(figpath + data_name + "_summary.png")
+plt.savefig(folder + "/" + data_name + "_summary.png")
 plt.close()
 
 ## Standardisation
@@ -82,7 +87,7 @@ test_samples = full_dataset[train_size:]
 
 ## Marginal estimation
 rho = train_rho(train_samples, init_dist, init_loc, init_scale, init_rho,
-                args.max_iter, args.lr, args.patience, args.tolerance, args.train_prop, 0.001, figpath, data_name)
+                args.max_iter, args.lr, args.patience, args.tolerance, args.train_prop, 0.001, folder, data_name)
 grid, trained = train_one_perm(train_samples, init_dist, init_loc, init_scale, rho)
 cdf, pdf = get_cdf_pdf(trained, grid, init_dist, init_loc, init_scale, rho)
 
@@ -92,11 +97,11 @@ plt.hist(train_samples, bins='auto', density=True, color='lightgrey', label="Obs
 plt.plot(grid, pdf, label="Estimated density")
 plt.title(f"Estimated marginal distribution with rho={rho:.3f}")
 plt.legend()
-plt.savefig(figpath + data_name + "_marginal.png")
+plt.savefig(folder + "/" + data_name + "_marginal.png")
 plt.close()
 
 ## vine fitting
-vine, window_size, best_crps = train_vinecop(full_dataset, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl)
+vine, window_size, best_crps = train_vinecop(full_dataset, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl, train_prop, max_lags)
 
 ## Bivariate copula fitting
 dataset = SlidingWindowDataset(full_dataset, window_size, steps_ahead=n_lags)
@@ -159,7 +164,7 @@ ax.fill_between(range(plot_length), ci_lower_bv[:plot_length], ci_upper_bv[:plot
 ax.fill_between(range(plot_length), ci_lower[:plot_length], ci_upper[:plot_length], alpha=0.4)
 plt.plot(true_values[:plot_length], '--', label="True", color='black')
 plt.legend()
-plt.savefig(figpath + data_name + "_forecasts.png")
+plt.savefig(folder + "/" + data_name + "_forecasts.png")
 plt.close()
 
 
@@ -173,7 +178,7 @@ plt.boxplot(torch.stack([torch.stack(crps).flatten(),
 ax = plt.gca()
 ax.invert_yaxis()
 plt.title("Box plots of CRPS for different models")
-plt.savefig(figpath + data_name + "_boxplots.png")
+plt.savefig(folder + "/" + data_name + "_boxplots.png")
 plt.close()
 
 
@@ -203,10 +208,10 @@ sta_rmse = torch.abs(stationary_pf - true_values).mean().sqrt()
 per_rmse = torch.abs(true_values[1:] - true_values[:-1]).mean().sqrt()
 
 print("\nRMSE Comparison",
-      "\nVineCop:    ", rmse.numpy() ,
-      "\nBiCop:      ", bv_rmse.numpy(), 
-      "\nNaive:      ", sta_rmse.numpy(), 
-      "\nPersistence:", per_rmse.numpy())
+      "\nVineCop:    ", rmse.numpy().round(5),
+      "\nBiCop:      ", bv_rmse.numpy().round(5), 
+      "\nNaive:      ", sta_rmse.numpy().round(5), 
+      "\nPersistence:", per_rmse.numpy().round(5))
 
 elapsed_time = time.time() - start_time
 print(f"--- time elapsed: {elapsed_time:.4f} seconds ---")
