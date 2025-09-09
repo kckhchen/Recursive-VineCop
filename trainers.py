@@ -61,7 +61,7 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
     train_sample = samples[:train_size]
     val_sample = samples[train_size:sample_size]
 
-    pbar = tqdm(range(max_iter), desc="Optimising Rho")
+    pbar = tqdm(range(max_iter), desc="Optimizing Rho")
     for i in pbar:
         crps_train_list = []
         crps_val_list = []
@@ -93,13 +93,13 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
             break
 
     final_rho = torch.sigmoid(rho).detach()
-    print(f"\nOptimisation finished. Final optimized rho: {final_rho.item():.5f}")
+    print(f"Optimization finished. Final optimized rho: {final_rho.item():.5f}")
 
     fig, ax1 = plt.subplots(figsize=(7, 4))
     ax2 = ax1.twinx()
-    line1, = ax1.plot(train_loss_history, 'g-', label="training loss")
-    line2, = ax2.plot(val_loss_history, 'b-', label="validation loss")
-    ax1.set_xlabel('Iterations');ax1.set_ylabel('Loss')
+    line1, = ax1.plot(train_loss_history, 'g-', label="Training loss")
+    line2, = ax2.plot(val_loss_history, 'b-', label="Validation loss")
+    ax1.set_xlabel("Iterations");ax1.set_ylabel("Training loss");ax2.set_ylabel("Validation Loss")
     plt.legend(handles=[line1, line2], loc='upper right')
     plt.savefig(figpath + "/" + data_name + "_loss.png")
     plt.close()
@@ -107,9 +107,9 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
     return final_rho
 
 
-def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=5, train_prop=0.7, max_lags=10):
+def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=5, train_prop=0.7, max_window=10):
     assert vine_structure in ['D', 'C', 'R'], "Vine structure not supported."
-    print("\nOptimising observation window size...")
+    print("\nOptimizing observation window size...")
     best_crps = np.inf
     window_size = 1
 
@@ -157,14 +157,14 @@ def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=
         
         avg_crps = torch.stack(crps).mean().numpy()
 
-        if avg_crps <= best_crps and max_lags <= 10:
-            print("window_size:", window_size, "current CRPS", avg_crps)
+        if avg_crps <= best_crps and max_window <= 10:
+            print("Window_size:", window_size, "current CRPS", avg_crps)
             best_crps = avg_crps
             best_vine = vine
             opt_window_size = window_size
             window_size += 1
         else:
-            print("optimisation finished. Best window size:", window_size - 1, ". Best CRPS:", best_crps.round(5))
+            print("Optimization finished. Best window size:", window_size - 1, ". Best CRPS:", best_crps.round(5))
             break
 
     return best_vine, opt_window_size, best_crps.item()

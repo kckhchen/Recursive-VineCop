@@ -3,13 +3,13 @@ import pandas as pd
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description='Recursive-VineCop training')
-parser.add_argument('--folder', type=str,  help='Data folder name', default="./data")
-parser.add_argument('--name', type=str, help='Data name', default="unnamed_weatherbench")
-parser.add_argument('--n_samples', type=int, help='Number of samples', default=5000)
-parser.add_argument('--n_batches', type=int, help='Number of batches to fetch data, must divide n_samples', default=50)
-parser.add_argument('--longitude', type=float, help='Longitude', default=358.5)
-parser.add_argument('--latitude', type=float, help='Latitude', default=52.5)
+parser = argparse.ArgumentParser(description='Generating WeatherBench2 Dataset')
+parser.add_argument('--folder', type=str,  help='name of folder to store the data', default="./data")
+parser.add_argument('--name', type=str, help='data name', default="unnamed_weatherbench")
+parser.add_argument('--n_samples', type=int, help='number of sample to generate', default=5000)
+parser.add_argument('--n_batches', type=int, help='number of batches to fetch data, must divide n_samples', default=50)
+parser.add_argument('--longitude', type=float, help='longitude', default=358.5)
+parser.add_argument('--latitude', type=float, help='latitude', default=52.5)
 args = parser.parse_args()
 
 folder = args.folder

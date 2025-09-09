@@ -4,12 +4,12 @@ from numba import jit
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description='Recursive-VineCop training')
-parser.add_argument('--folder', type=str,  help='Data folder name', default="./data")
-parser.add_argument('--name', type=str, help='Data name, L63 or L96', default="L63")
-parser.add_argument('--n_samples', type=int, help='Number of samples', default=5000)
-parser.add_argument('--burn_in', type=int, help='Burn in steps', default=100)
-parser.add_argument('--discard_interval', type=int, help='Discard interval', default=15)
+parser = argparse.ArgumentParser(description='Generating Lorenz63 or Lorenz96 Datasets')
+parser.add_argument('--folder', type=str,  help='name of folder to store the data', default="./data")
+parser.add_argument('--name', type=str, help='data name, can be L63 or L96', default="L63")
+parser.add_argument('--n_samples', type=int, help='number of samples to generates', default=5000)
+parser.add_argument('--burn_in', type=int, help='burn-in steps', default=100)
+parser.add_argument('--discard_interval', type=int, help='discard interval', default=15)
 args = parser.parse_args()
 
 folder = args.folder
@@ -22,7 +22,7 @@ if not os.path.exists(folder):
     os.makedirs(folder)
 
 # generating functions for lorenz63 and lorenz96 
-# are taken from https://github.com/LoryPack/GenerativeNetworksScoringRulesProbabilisticForecasting
+# are taken and modified from https://github.com/LoryPack/GenerativeNetworksScoringRulesProbabilisticForecasting
 
 @jit(nopython=True, cache=True)
 def l96_truth_step(X, Y, h, F, b, c):
@@ -129,6 +129,7 @@ def lorenz(x, y, z, s=10, r=28, b=2.667): # directly taken from Picchiardi's cod
         z_dot = x * y - b * z
         return x_dot, y_dot, z_dot
 
+assert data_name in ["L63", "L96"], "Data name not supported."
 if data_name == "L63":
     integration_steps = (n_samples + burn_in) * discard_interval 
     dt = 0.01
