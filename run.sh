@@ -1,0 +1,1 @@
+python3 ./main.py --data_name "lorenz63" --init_loc "Normal"
