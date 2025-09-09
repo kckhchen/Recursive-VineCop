@@ -13,3 +13,4 @@ A `run.sh` script file is also included, which contains shell commands that can 
 ```
 pip install -r requirements.txt
 ```
+The code was run on Python version 3.10.4.

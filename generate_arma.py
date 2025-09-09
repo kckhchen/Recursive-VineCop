@@ -3,16 +3,16 @@ import pandas as pd
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description='Recursive-VineCop training')
-parser.add_argument('--folder', type=str, help='Data folder name', default="./data")
-parser.add_argument('--name', type=str, help='Data name', default="unnamed_ARMA")
-parser.add_argument('--ar_params', type=str, help='AR parameters, string with values separated with commas', default="0.")
-parser.add_argument('--ma_params', type=str, help='MA parameters, string with values separated with commas', default="0.")
-parser.add_argument('--n_samples', type=int, help='Number of samples', default=5000)
-parser.add_argument('--drift', type=float, help='drift parameter', default=0.)
-parser.add_argument('--sigma', type=float, help='Noise variance', default=1.)
-parser.add_argument('--burn_in', type=int, help='Burn in size', default=500)
-parser.add_argument('--seed', type=int, help='Random seed', default=None)
+parser = argparse.ArgumentParser(description='Generating ARMA Processes')
+parser.add_argument('--folder', type=str, help='name of folder to store the data', default="./data")
+parser.add_argument('--name', type=str, help='data name', default="unnamed_ARMA")
+parser.add_argument('--ar_params', type=str, help='AR parameters, string with values separated by commas', default="0.")
+parser.add_argument('--ma_params', type=str, help='MA parameters, string with values separated by commas', default="0.")
+parser.add_argument('--n_samples', type=int, help='number of samples to generate', default=5000)
+parser.add_argument('--drift', type=float, help='drift parameter of the process', default=0.)
+parser.add_argument('--sigma', type=float, help='noise variance of the process', default=1.)
+parser.add_argument('--burn_in', type=int, help='burn-in steps', default=500)
+parser.add_argument('--seed', type=int, help='random seed, random if not specified', default=None)
 args = parser.parse_args()
 
 folder = args.folder

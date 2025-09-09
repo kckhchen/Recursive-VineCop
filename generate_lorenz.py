@@ -4,12 +4,12 @@ from numba import jit
 import argparse
 import os
 
-parser = argparse.ArgumentParser(description='Recursive-VineCop training')
-parser.add_argument('--folder', type=str,  help='Data folder name', default="./data")
-parser.add_argument('--name', type=str, help='Data name, L63 or L96', default="L63")
-parser.add_argument('--n_samples', type=int, help='Number of samples', default=5000)
-parser.add_argument('--burn_in', type=int, help='Burn in steps', default=100)
-parser.add_argument('--discard_interval', type=int, help='Discard interval', default=15)
+parser = argparse.ArgumentParser(description='Generating Lorenz63 or Lorenz96 Datasets')
+parser.add_argument('--folder', type=str,  help='name of folder to store the data', default="./data")
+parser.add_argument('--name', type=str, help='data name, can be L63 or L96', default="L63")
+parser.add_argument('--n_samples', type=int, help='number of samples to generates', default=5000)
+parser.add_argument('--burn_in', type=int, help='burn-in steps', default=100)
+parser.add_argument('--discard_interval', type=int, help='discard interval', default=15)
 args = parser.parse_args()
 
 folder = args.folder
