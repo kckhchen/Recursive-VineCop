@@ -93,7 +93,7 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
             break
 
     final_rho = torch.sigmoid(rho).detach()
-    print(f"\nOptimisation finished. Final optimized rho: {final_rho.item():.5f}")
+    print(f"Optimisation finished. Final optimized rho: {final_rho.item():.5f}")
 
     fig, ax1 = plt.subplots(figsize=(7, 4))
     ax2 = ax1.twinx()

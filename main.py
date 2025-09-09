@@ -16,12 +16,13 @@ from trainers import *
 parser = argparse.ArgumentParser(description='Recursive-VineCop training')
 parser.add_argument('--data_folder', type=str, help='The folder where data are stored', default="./data")
 parser.add_argument('--data_name', type=str, help='Name for the data', default='AR3')
+parser.add_argument('--component', type=int, help='Which data component to use, only eligible for Lorenz96', default=1)
 parser.add_argument('--fig_folder', type=str, help='Folder to store figures', default="./figures")
 parser.add_argument('--train_size', type=int, help='Training size', default=1500)
 parser.add_argument('--init_dist', type=str, help='Prior distrbution, can be Normal or Cauchy', default='Cauchy')
 parser.add_argument('--init_loc', type=float, help='Initial mean', default=0.)
 parser.add_argument('--init_scale', type=float, help='Initial standard deviation', default=1.)
-parser.add_argument('--init_rho', type=float, help='Initial rho value', default=0.3)
+parser.add_argument('--init_rho', type=float, help='Initial rho value', default=0.1)
 parser.add_argument('--train_prop', type=float, help='Train_val split', default=0.7)
 parser.add_argument('--max_lags', type=int, help='Maximal lags allowed for vine copula', default=10)
 parser.add_argument('--tolerance', type=float, help='Tolerance for rho optimisation early stopping', default=1e-4)
@@ -40,6 +41,7 @@ start_time = time.time()
 data_folder = args.data_folder
 folder =  args.fig_folder
 data_name = args.data_name
+component = args.component
 train_size = args.train_size
 init_dist = args.init_dist
 init_loc = args.init_loc
@@ -59,7 +61,7 @@ if not os.path.exists(folder):
 data_path = data_folder + "/" + data_name + ".csv"
 
 full_dataset = pd.read_csv(data_path, index_col=0).to_numpy()
-if data_name == "L96": full_dataset = full_dataset[:, 0]
+if data_name == "L96": full_dataset = full_dataset[:, component-1]
 full_dataset = torch.as_tensor(full_dataset, dtype=torch.float).flatten()
 
 ## Summary plots
@@ -194,7 +196,7 @@ result_df = pd.DataFrame([[mean_crps_vine.round(5), mean_crps_bicop.round(5), me
                     [std_crps_vine.round(5), std_crps_bicop.round(5), std_crps_stationary.round(5)]],
                     columns=["VineCop", "BiCop", "Naïve"], index=["Mean", "Std"])
 
-print("\nCRPS comparison\n", result_df)
+print("\n---CRPS Comparison---\n", result_df)
 
 pred = torch.stack(point_forecasts)
 rmse = torch.abs(pred - true_values).mean().sqrt()
@@ -207,11 +209,11 @@ sta_rmse = torch.abs(stationary_pf - true_values).mean().sqrt()
 
 per_rmse = torch.abs(true_values[1:] - true_values[:-1]).mean().sqrt()
 
-print("\nRMSE Comparison",
+print("\n---RMSE Comparison---",
       "\nVineCop:    ", rmse.numpy().round(5),
       "\nBiCop:      ", bv_rmse.numpy().round(5), 
       "\nNaive:      ", sta_rmse.numpy().round(5), 
       "\nPersistence:", per_rmse.numpy().round(5))
 
 elapsed_time = time.time() - start_time
-print(f"--- time elapsed: {elapsed_time:.4f} seconds ---")
+print(f"\n--- time elapsed: {elapsed_time:.4f} seconds ---")

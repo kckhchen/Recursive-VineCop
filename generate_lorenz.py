@@ -22,7 +22,7 @@ if not os.path.exists(folder):
     os.makedirs(folder)
 
 # generating functions for lorenz63 and lorenz96 
-# are taken from https://github.com/LoryPack/GenerativeNetworksScoringRulesProbabilisticForecasting
+# are taken and modified from https://github.com/LoryPack/GenerativeNetworksScoringRulesProbabilisticForecasting
 
 @jit(nopython=True, cache=True)
 def l96_truth_step(X, Y, h, F, b, c):
@@ -129,6 +129,7 @@ def lorenz(x, y, z, s=10, r=28, b=2.667): # directly taken from Picchiardi's cod
         z_dot = x * y - b * z
         return x_dot, y_dot, z_dot
 
+assert data_name in ["L63", "L96"], "Data name not supported."
 if data_name == "L63":
     integration_steps = (n_samples + burn_in) * discard_interval 
     dt = 0.01
