@@ -1,6 +1,6 @@
 # Recursive-VineCop
 
-This is the code for my MSc dissertation "Online Probabilistic Forecasting with Vine Copulas", submitted in partial fulfillment of the requirements for the degree of MSc in Statistics in the University of Warwick.
+This is the code for my MSc dissertation "Online Probabilistic Weather Forecasting with Vine Copulas", submitted in partial fulfillment of the requirements for the degree of MSc in Statistics in the University of Warwick.
 
 There are four runnable Python scripts: `generate_arma.py`, `generate_lorenz.py`, and `generate_weatherbench.py` are for generating datasets used in the dissertation. Datasets used in the dissertation can alternatively be found in the `data` folder.
 `main.py` will test the models on the datasets and report the results (plots and performance metrics).
