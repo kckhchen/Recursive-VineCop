@@ -45,7 +45,7 @@ def train_one_perm(data: torch.Tensor,
                    init_loc: float,
                    init_scale: float,
                    rho: float
-                   ) -> tuple[torch.Tensor, torch.Tensor]:
+                   ):
     """Intermediate Step of the R-BP algorithm.
     Args:
         data (Tensor): 1d tensor for permutation.
@@ -90,7 +90,7 @@ def get_cdf_pdf(trained_recursion: torch.Tensor,
                 init_scale: float,
                 rho: float,
                 list: bool = False
-                ) ->  tuple[torch.Tensor, torch.Tensor] | tuple[list[torch.Tensor], list[torch.Tensor]]:
+                ):
     """Evaluating the Predictive CDF and PDF.
     Args:
         trained_recursion (Tensor): output from train_one_perm().

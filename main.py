@@ -15,7 +15,7 @@ from trainers import *
 
 parser = argparse.ArgumentParser(description='Recursive-VineCop training')
 parser.add_argument('--data_folder', type=str, help='name of folder where data are stored', default="./data")
-parser.add_argument('--data_name', type=str, help='name of the data', default='AR3')
+parser.add_argument('--data_name', type=str, help='name of the data, only csv files are allowed', default='AR3')
 parser.add_argument('--component', type=int, help='which data component to use, only eligible for Lorenz96', default=1)
 parser.add_argument('--fig_folder', type=str, help='name of folder to store result figures', default="./results")
 parser.add_argument('--train_size', type=int, help='training data size', default=1500)

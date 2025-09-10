@@ -57,7 +57,7 @@ def train_rho(samples: np.ndarray | torch.Tensor,
               eta_min: float,
               figpath: str,
               data_name: str
-              ) -> torch.Tensor:
+              ):
     """Optimise rho for the R-BP algorithm.
     Args:
         samples (ndarray or Tensor): training and validation samples.
@@ -94,7 +94,6 @@ def train_rho(samples: np.ndarray | torch.Tensor,
     pbar = tqdm(range(max_iter), desc="Optimizing Rho")
     for i in pbar:
         crps_train_list = []
-        crps_val_list = []
         optimizer.zero_grad()
         current_rho = torch.sigmoid(rho)
 
@@ -146,7 +145,7 @@ def train_vinecop(data: torch.Tensor,
                   trunc_lvl: int,
                   train_prop: float,
                   max_window: int
-                  ) -> tuple[pv.Vinecop, int, float]:
+                  ):
     """Optimise Observation Window Size and Fit Final Vine.
     Args:
         data (Tensor): training and validation samples.
@@ -222,6 +221,4 @@ def train_vinecop(data: torch.Tensor,
             print("Optimization finished. Best window size:", window_size - 1, ". Best CRPS:", best_crps.round(5))
             break
 
-        best_crps = best_crps.item()
-
-    return best_vine, opt_window_size, best_crps
+    return best_vine, opt_window_size, best_crps.item()
