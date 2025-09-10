@@ -44,8 +44,38 @@ class EarlyStopping:
             return True
         return False
 
-def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=500, lr=0.05, patience=10, tolerance=1e-5,
-              train_prop=0.7, eta_min=0.001, figpath=None, data_name=None):
+def train_rho(samples: np.ndarray | torch.Tensor,
+              init_dist: str,
+              init_loc: float,
+              init_scale: float,
+              init_rho: float,
+              max_iter: int,
+              lr: float,
+              patience: int,
+              tolerance: float,
+              train_prop: float,
+              eta_min: float,
+              figpath: str,
+              data_name: str
+              ):
+    """Optimise rho for the R-BP algorithm.
+    Args:
+        samples (ndarray or Tensor): training and validation samples.
+        init_dist (str): prior distribution. Can either be "Normal" or "Cauchy".
+        init_loc (float): mean of the prior distribution.
+        init_scale (float): standard deviation of the prior distribution.
+        init_rho (float): starting rho value.
+        max_iter (int): max number of iteration.
+        lr (float): learning rate.
+        patience (int): patience of the early stopper.
+        tolerance (float): tolerance of the early stopper.
+        train_prop (float): proportion of the training data. 1 - train_prop will be the validation size.
+        eta_min (float): min rate of the scheduler.
+        figpath (str): folder for storing the loss plot.
+        data_name (str): name of the data, for naming the loss plot.
+    Returns:
+        final_rho (Tensor): final optimised rho.
+    """
     rho = torch.tensor(np.log(init_rho / (1-init_rho)), dtype=torch.float, requires_grad=True)
     optimizer = torch.optim.Adam([rho], lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=max_iter, eta_min=eta_min)
@@ -64,7 +94,6 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
     pbar = tqdm(range(max_iter), desc="Optimizing Rho")
     for i in pbar:
         crps_train_list = []
-        crps_val_list = []
         optimizer.zero_grad()
         current_rho = torch.sigmoid(rho)
 
@@ -107,7 +136,32 @@ def train_rho(samples, init_dist, init_loc, init_scale, init_rho=0.7, max_iter=5
     return final_rho
 
 
-def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=5, train_prop=0.7, max_window=10):
+def train_vinecop(data: torch.Tensor,
+                  grid: torch.Tensor,
+                  cdf: torch.Tensor,
+                  pdf: torch.Tensor,
+                  n_lags: int,
+                  vine_structure: str,
+                  trunc_lvl: int,
+                  train_prop: float,
+                  max_window: int
+                  ):
+    """Optimise Observation Window Size and Fit Final Vine.
+    Args:
+        data (Tensor): training and validation samples.
+        grid (Tensor): grid of the cdf and pdf.
+        cdf (Tensor): estimated marginal cdf.
+        pdf (Tensor): estimated marginal pdf.
+        n_lags (int): how many steps ahead to predict.
+        vine_structure (str): which vine structure to use. Can be 'C', 'D', or 'R'
+        trunc_lvl (int): truncation level for the vine copula.
+        train_prop (float): proportion of the training data. 1 - train_prop will be the validation size.
+        max_window (int): max observation window size allowed.
+    Returns:
+        best_vine (Vinecop object): the optimal vine copula.
+        opt_window_size (int): the optimal observation window size.
+        best_crps (float): the CRPS yielded by the best_vine with opt_window_size.
+    """
     assert vine_structure in ['D', 'C', 'R'], "Vine structure not supported."
     print("\nOptimizing observation window size...")
     best_crps = np.inf
@@ -120,11 +174,11 @@ def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=
         train_set = Subset(dataset, list(range(train_size)))
         val_set = Subset(dataset, list(range(train_size, dataset_size)))
         histories = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_set]).squeeze(1)
-        histories_u = inv_cdf_transform(histories, grid, cdf)
+        histories_unif = inv_cdf_transform(histories, grid, cdf)
 
         val_histories = torch.stack([history for history, _ in val_set]).T
         true_values = torch.stack([target for _, target in val_set])
-        val_histories_u = inv_cdf_transform(val_histories, grid, cdf)
+        val_histories_unif = inv_cdf_transform(val_histories, grid, cdf)
 
         controls = pv.FitControlsVinecop(
             family_set=[pv.gaussian, pv.student, pv.tll, pv.indep],
@@ -140,13 +194,13 @@ def train_vinecop(data, grid, cdf, pdf, n_lags=1, vine_structure='D', trunc_lvl=
             structure = pv.RVineStructure(order=range(1, window_size+2))
                   
         vine = pv.Vinecop.from_structure(structure)
-        vine.select(histories_u, controls=controls)
+        vine.select(histories_unif, controls=controls)
 
         crps = []
 
         for i in range(0, len(val_set)):
             true_value = true_values[-i]
-            repeated_array = np.tile(val_histories_u[:, -i], (len(cdf), 1))
+            repeated_array = np.tile(val_histories_unif[:, -i], (len(cdf), 1))
 
             den = vine.pdf(np.column_stack([repeated_array, cdf]))
             den = den / np.trapezoid(den, cdf)

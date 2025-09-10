@@ -15,14 +15,15 @@ from trainers import *
 
 parser = argparse.ArgumentParser(description='Recursive-VineCop training')
 parser.add_argument('--data_folder', type=str, help='name of folder where data are stored', default="./data")
-parser.add_argument('--data_name', type=str, help='name of the data', default='AR3')
+parser.add_argument('--data_name', type=str, help='name of the data, only csv files are allowed', default='AR3')
 parser.add_argument('--component', type=int, help='which data component to use, only eligible for Lorenz96', default=1)
 parser.add_argument('--fig_folder', type=str, help='name of folder to store result figures', default="./results")
-parser.add_argument('--train_size', type=int, help='training data size', default=1500)
+parser.add_argument('--train_size', type=int, help='training data size (proportion)', default=1500)
 parser.add_argument('--init_dist', type=str, help='prior distrbution, can be Normal or Cauchy', default='Cauchy')
 parser.add_argument('--init_loc', type=float, help='initial mean for the prior', default=0.)
 parser.add_argument('--init_scale', type=float, help='initial standard deviation for the prior', default=1.)
 parser.add_argument('--init_rho', type=float, help='initial rho value for training', default=0.1)
+parser.add_argument('--set_rho', type=float, help='set rho value and skip the optimisation process')
 parser.add_argument('--train_prop', type=float, help='train-validation split for rho and vine training', default=0.7)
 parser.add_argument('--max_window', type=int, help='max window size allowed for vine copula', default=10)
 parser.add_argument('--tolerance', type=float, help='tolerance for rho optimisation early stopping', default=1e-4)
@@ -48,6 +49,7 @@ init_dist = args.init_dist
 init_loc = args.init_loc
 init_scale = args.init_scale
 init_rho = args.init_rho
+set_rho = args.set_rho
 train_prop = args.train_prop
 max_window = args.max_window
 n_lags = args.n_lags
@@ -61,36 +63,37 @@ if not os.path.exists(folder):
 
 data_path = data_folder + "/" + data_name + ".csv"
 
-full_dataset = pd.read_csv(data_path, index_col=0).to_numpy()
-if data_name == "L96": full_dataset = full_dataset[:, component-1]
-full_dataset = torch.as_tensor(full_dataset, dtype=torch.float).flatten()
+time_series = pd.read_csv(data_path, index_col=0).to_numpy()
+if data_name == "L96": time_series = time_series[:, component-1]
+time_series = torch.as_tensor(time_series, dtype=torch.float).flatten()
 
 ## Summary plots
 _, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=False)
-axes[0].plot(full_dataset, label='Generated Series', color='blue')
+axes[0].plot(time_series, label='Generated Series', color='blue')
 axes[0].set_title('Time Series Plot')
 axes[0].grid(True)
-acf_vals = acf(full_dataset, nlags=100, fft=True)
+acf_vals = acf(time_series, nlags=100, fft=True)
 sns.barplot(x=np.arange(1, 100 + 1), y=acf_vals[1:], ax=axes[1], color='orangered')
 axes[1].set_title('Autocorrelation Function (ACF)')
 axes[1].set_xticks(np.arange(-1, 100, 5))
-conf_level = 1.96 / np.sqrt(len(full_dataset))
+conf_level = 1.96 / np.sqrt(len(time_series))
 axes[1].axhline(y=conf_level, linestyle='--', color='blue', linewidth=1.2)
 axes[1].axhline(y=-conf_level, linestyle='--', color='blue', linewidth=1.2)
 plt.tight_layout()
 plt.savefig(folder + "/" + data_name + "_summary.png")
 plt.close()
 
-## Standardisation
-data_mean = torch.mean(full_dataset)
-data_std = torch.std(full_dataset)
-full_dataset = (full_dataset - data_mean) / data_std
-train_samples = full_dataset[:train_size]
-test_samples = full_dataset[train_size:]
+## Standardisation and split
+time_series = (time_series - torch.mean(time_series)) / torch.std(time_series)
+train_samples = time_series[:train_size]
 
-## Marginal estimation
-rho = train_rho(train_samples, init_dist, init_loc, init_scale, init_rho,
-                args.max_iter, args.lr, args.patience, args.tolerance, args.train_prop, args.eta_min, folder, data_name)
+## Marginal estimation (or specifiy rho)
+if set_rho is None:
+    rho = train_rho(train_samples, init_dist, init_loc, init_scale, init_rho,
+                    args.max_iter, args.lr, args.patience, args.tolerance, args.train_prop, args.eta_min, folder, data_name)
+else:
+    rho = set_rho
+
 grid, trained = train_one_perm(train_samples, init_dist, init_loc, init_scale, rho)
 cdf, pdf = get_cdf_pdf(trained, grid, init_dist, init_loc, init_scale, rho)
 
@@ -104,67 +107,55 @@ plt.savefig(folder + "/" + data_name + "_marginal.png")
 plt.close()
 
 ## vine fitting
-vine, window_size, best_crps = train_vinecop(full_dataset, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl, train_prop, max_window)
+vine, window_size, best_crps = train_vinecop(time_series, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl, train_prop, max_window)
 
 ## Bivariate copula fitting
-dataset = SlidingWindowDataset(full_dataset, window_size, steps_ahead=n_lags)
+dataset = SlidingWindowDataset(time_series, window_size, steps_ahead=n_lags)
 dataset_size = len(dataset)
 train_set = Subset(dataset, list(range(train_size)))
 test_set = Subset(dataset, list(range(train_size, dataset_size)))
-histories = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_set]).squeeze(1)
-histories_u = inv_cdf_transform(histories, grid, cdf)
-bicop = pv.Bicop.from_data(histories_u[:, -2:])
+test_size = len(test_set)
+train_histories_targets = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_set]).squeeze(1)
+train_histories_targets_unif = inv_cdf_transform(train_histories_targets, grid, cdf)
+bv_cop = pv.Bicop.from_data(train_histories_targets_unif[:, -2:])
 
 ## Forecast plot
-crps = []
-bicop_crps = []
-naive_crps = []
-point_forecasts = []
-ci_lower_list = []
-ci_upper_list = []
-bv_point_forecasts = []
-ci_lower_list_bv = []
-ci_upper_list_bv = []
+crps = torch.zeros(3, test_size) # (vine, bv, naive)
+forecasts_vine = torch.zeros(3, test_size) # (median, upper_ci, lower_ci)
+forecasts_bv = torch.zeros(3, test_size)
 
 test_histories = torch.stack([history for history, _ in test_set]).T
 true_values = torch.stack([target for _, target in test_set])
-test_histories_u = inv_cdf_transform(test_histories, grid, cdf)
+test_histories_unif = inv_cdf_transform(test_histories, grid, cdf)
 
-for i in range(len(test_set)):
+for i in range(test_size):
     true_value = true_values[i]
-    repeated_array = np.tile(test_histories_u[:, i], (len(cdf), 1))
+    repeated_array = np.tile(test_histories_unif[:, i], (len(cdf), 1))
 
     est_pdf = vine.pdf(np.column_stack([repeated_array, cdf])) * pdf.numpy()
     est_pdf = est_pdf / np.trapezoid(est_pdf, grid)
-    est_cdf = cumulative_trapezoid(est_pdf, grid, initial=0)
+    est_cdf = torch.tensor(cumulative_trapezoid(est_pdf, grid, initial=0), dtype=torch.float)
 
-    est_pdf_bicop = bicop.pdf(np.column_stack([repeated_array[:, -1], cdf])) * pdf.numpy()
-    est_pdf_bicop = est_pdf_bicop / np.trapezoid(est_pdf_bicop, grid)
-    est_cdf_bicop = cumulative_trapezoid(est_pdf_bicop, grid, initial=0)
+    est_pdf_bv = bv_cop.pdf(np.column_stack([repeated_array[:, -1], cdf])) * pdf.numpy()
+    est_pdf_bv = est_pdf_bv / np.trapezoid(est_pdf_bv, grid)
+    est_cdf_bv = torch.tensor(cumulative_trapezoid(est_pdf_bv, grid, initial=0), dtype=torch.float)
 
-    crps.append(crps_integral(true_value, grid, torch.as_tensor(est_cdf, dtype=torch.float)))
-    bicop_crps.append(crps_integral(true_value, grid, torch.as_tensor(est_cdf_bicop, dtype=torch.float)))
-    naive_crps.append(crps_integral(true_value, grid, torch.as_tensor(cdf, dtype=torch.float)))
-
-    point_forecasts.append(grid[np.argmin(abs(est_cdf - 0.5))])
-    ci_lower_list.append(grid[np.argmin(abs(est_cdf - (1 - ci) / 2))])
-    ci_upper_list.append(grid[np.argmin(abs(est_cdf - (1 - (1 - ci) / 2)))])
-    bv_point_forecasts.append(grid[np.argmin(abs(est_cdf_bicop - 0.5))])
-    ci_lower_list_bv.append(grid[np.argmin(abs(est_cdf_bicop - (1 - ci) / 2))])
-    ci_upper_list_bv.append(grid[np.argmin(abs(est_cdf_bicop - (1 - (1 - ci) / 2)))])
+    crps[:, i] = crps_integral(true_value, grid, torch.stack([est_cdf, est_cdf_bv, cdf]))
+    
+    forecasts_vine[:, i] = torch.stack([grid[torch.argmin(abs(est_cdf - 0.5))],
+                                        grid[torch.argmin(abs(est_cdf - (1 - ci) / 2))],
+                                        grid[torch.argmin(abs(est_cdf - (1 - (1 - ci) / 2)))]])
+    
+    forecasts_bv[:, i] = torch.stack([grid[torch.argmin(abs(est_cdf_bv - 0.5))],
+                                      grid[torch.argmin(abs(est_cdf_bv - (1 - ci) / 2))],
+                                      grid[torch.argmin(abs(est_cdf_bv - (1 - (1 - ci) / 2)))]])
 
 plt.figure(figsize=(15, 4))
-pred = torch.stack(point_forecasts)
-bv_pred = torch.stack(bv_point_forecasts)
-ci_upper = torch.stack(ci_upper_list)
-ci_lower = torch.stack(ci_lower_list)
-ci_upper_bv = torch.stack(ci_upper_list_bv)
-ci_lower_bv = torch.stack(ci_lower_list_bv)
 ax = plt.gca()
-plt.plot(bv_pred[:plot_length], label="BiCop", color='orange')
-plt.plot(pred[:plot_length], label="VineCop")
-ax.fill_between(range(plot_length), ci_lower_bv[:plot_length], ci_upper_bv[:plot_length], alpha=0.3, color='orange')
-ax.fill_between(range(plot_length), ci_lower[:plot_length], ci_upper[:plot_length], alpha=0.4)
+plt.plot(forecasts_bv[0, :plot_length], label="BiCop", color='orange')
+plt.plot(forecasts_vine[0, :plot_length], label="VineCop")
+ax.fill_between(range(plot_length), *forecasts_bv[1:, :plot_length], alpha=0.3, color='orange')
+ax.fill_between(range(plot_length), *forecasts_vine[1:, :plot_length], alpha=0.4)
 plt.plot(true_values[:plot_length], '--', label="True", color='black')
 plt.legend()
 plt.savefig(folder + "/" + data_name + "_forecasts.png")
@@ -172,46 +163,25 @@ plt.close()
 
 ## Boxplots
 plt.figure(figsize=(7, 3))
-plt.boxplot(torch.stack([torch.stack(crps).flatten(),
-                         torch.stack(bicop_crps).flatten(),
-                         torch.stack(naive_crps).flatten()],
-                         dim=1),
-            orientation="horizontal", tick_labels=['Vine', 'Bicop', 'Naïve'])
+plt.boxplot(crps.T, orientation="horizontal", tick_labels=['Vine', 'Bicop', 'Naïve'])
 ax = plt.gca()
 ax.invert_yaxis()
 plt.savefig(folder + "/" + data_name + "_boxplots.png")
 plt.close()
 
 ## Metrics
-mean_crps_vine = torch.stack(crps).mean().numpy()
-mean_crps_bicop = torch.stack(bicop_crps).mean().numpy()
-mean_crps_stationary = torch.stack(naive_crps).mean().numpy()
-std_crps_vine = torch.stack(crps).std().numpy()
-std_crps_bicop = torch.stack(bicop_crps).std().numpy()
-std_crps_stationary = torch.stack(naive_crps).std().numpy()
+forecasts_naive = grid[torch.argmin(abs(cdf - 0.5))].expand(test_size)
+forecasts_persistence = torch.cat([train_set[-1][1].reshape(1), true_values[:-1]])
+rmse = torch.abs(torch.stack([forecasts_vine[0],
+                              forecasts_bv[0],
+                              forecasts_naive,
+                              forecasts_persistence]) - true_values).mean(dim=1).sqrt().numpy()
 
-result_df = pd.DataFrame([[mean_crps_vine.round(5), mean_crps_bicop.round(5), mean_crps_stationary.round(5)],
-                    [std_crps_vine.round(5), std_crps_bicop.round(5), std_crps_stationary.round(5)]],
-                    columns=["VineCop", "BiCop", "Naive"], index=["Mean", "Std"])
-
-print("\n--- CRPS Comparison ---\n", result_df)
-
-pred = torch.stack(point_forecasts)
-rmse = torch.abs(pred - true_values).mean().sqrt()
-
-bv_pred = torch.stack(bv_point_forecasts)
-bv_rmse = torch.abs(bv_pred - true_values).mean().sqrt()
-
-stationary_pf = grid[np.argmin(abs(cdf - 0.5))]
-sta_rmse = torch.abs(stationary_pf - true_values).mean().sqrt()
-
-per_rmse = torch.abs(true_values[1:] - true_values[:-1]).mean().sqrt()
-
-print("\n--- RMSE Comparison ---",
-      "\nVineCop:    ", rmse.numpy().round(5),
-      "\nBiCop:      ", bv_rmse.numpy().round(5), 
-      "\nNaive:      ", sta_rmse.numpy().round(5), 
-      "\nPersistence:", per_rmse.numpy().round(5))
+print("\n------ Performance Comparison ------")
+print(pd.DataFrame([crps.mean(dim=1).numpy().round(5),
+                    crps.std(dim=1).numpy().round(5),
+                    rmse.round(5)],
+                    columns=["VineCop", "BiCop", "Naive", "Persistence"], index=["Mean CRPS", "Std CRPS", "RMSE"]).T)
 
 elapsed_time = time.time() - start_time
 print(f"\n--- Time elapsed: {elapsed_time:.4f} seconds ---\n")

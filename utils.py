@@ -8,14 +8,6 @@ TAIL = 0.1 # extra margins for plotting
 GRID_SIZE = 500 # controls fineness of grids
 FINENESS = 10
 
-def create_perms(data, n_perms):
-    perms = []
-    for _ in range(n_perms):
-        perm_idx = torch.randperm(len(data))
-        sequence = data[perm_idx]
-        perms.append(sequence)
-    return torch.stack(perms)
-
 def H_copula(rho, u, v):
     numer = Normal(0, 1).icdf(u) - rho * Normal(0, 1).icdf(v)
     denom = torch.sqrt(1 - rho ** 2)
@@ -23,8 +15,8 @@ def H_copula(rho, u, v):
     output = torch.clip(output, min=FLT, max=1-FLT)
     return output
 
-# work in the log space for numerical stability
 def ldbinorm(rho, u, v, locs=[0, 0], scales=[1, 1]):
+    # work in the log space for numerical stability
     target_device = u.device
     target_dtype = u.dtype
     mean_vector = torch.tensor(locs, dtype=target_dtype, device=target_device)
@@ -48,7 +40,23 @@ def c_copula(rho, u, v):
 
 # for Hahn (2018), the functions below use the helper functions above
 
-def train_one_perm(data, init_dist, init_loc, init_scale, rho):
+def train_one_perm(data: torch.Tensor,
+                   init_dist: str,
+                   init_loc: float,
+                   init_scale: float,
+                   rho: float
+                   ):
+    """Intermediate Step of the R-BP algorithm.
+    Args:
+        data (Tensor): 1d tensor for permutation.
+        init_dist (str): prior distribution. Can either be "Normal" or "Cauchy".
+        init_loc (float): mean of the prior distribution.
+        init_scale (float): standard deviation of the prior distribution.
+        rho (float): correlation coefficient for the Gaussian copula.
+    Returns:
+        grid (Tensor): grid for plotting and getting cdf and pdf later.
+        trained_recursion (Tensor): P_0(Y1), P_1(Y2), etc., for getting cdf and pdf.
+    """
     target_device = data.device
     target_dtype = data.dtype
     rho = torch.as_tensor(rho, dtype=target_dtype, device=target_device)
@@ -63,19 +71,40 @@ def train_one_perm(data, init_dist, init_loc, init_scale, rho):
         cdf = torch.as_tensor(np.interp(data, grid, init_dist), dtype=torch.float)
         
     cdf = torch.clip(cdf, min=FLT, max=1-FLT) # clips extreme values to avoid inf or nan
-    predictive_dist = torch.zeros(len(data)) # for storing P_0(Y1), P_1(Y2), etc.
-    predictive_dist[0] = cdf[0] # P_0(Y1)
+    trained_recursion = torch.zeros(len(data)) # for storing P_0(Y1), P_1(Y2), etc.
+    trained_recursion[0] = cdf[0] # P_0(Y1)
 
     for k in range(1, len(data)): # compute every predictive dist iteratively
         alpha = (2 - 1/k) * (1/(k+1))
         Cop = H_copula(rho=rho, u=cdf[1:], v=cdf[0])
         cdf = (1 - alpha) * cdf[1:] + alpha * Cop
         cdf = torch.clip(cdf, min=FLT, max=1-FLT)
-        predictive_dist[k] = cdf[0] # P_i-1(Y) for i from 2 to n
+        trained_recursion[k] = cdf[0] # P_i-1(Y) for i from 2 to n
 
-    return grid, predictive_dist
+    return grid, trained_recursion
 
-def get_cdf_pdf(trained_recursion, grid, init_dist, init_loc, init_scale, rho, list=False): # trained_recursion = output from train_one_perm
+def get_cdf_pdf(trained_recursion: torch.Tensor,
+                grid: torch.Tensor,
+                init_dist: str,
+                init_loc: float,
+                init_scale: float,
+                rho: float,
+                list: bool = False
+                ):
+    """Evaluating the Predictive CDF and PDF.
+    Args:
+        trained_recursion (Tensor): output from train_one_perm().
+        grid (Tensor): grid from train_one_perm().
+        init_dist (str): prior distribution, should be the same as in train_one_perm().
+        init_loc (float): mean of the prior distribution, should be the same as in train_one_perm().
+        init_scale (float): standard deviation of the prior distribution, should be the same as in train_one_perm().
+        rho (float): correlation coefficient for the Gaussian copula, should be the same as in train_one_perm().
+        list (bool): if true then cdf and pdf in every step will be recorded and returned. default False.
+    Returns:
+        cdf_grid (Tensor): estimated cdf on grid.
+        pdf_grid (Tensor): estimated pdf on grid.
+        ** if list = True then this will return a list of cdfs and pdfs, one for every new point. **
+    """
     target_device = trained_recursion.device
     target_dtype = trained_recursion.dtype
     cdf_grid_list = []
@@ -113,7 +142,15 @@ def get_cdf_pdf(trained_recursion, grid, init_dist, init_loc, init_scale, rho, l
     return cdf_grid, pdf_grid
 
 # to evaluate crps
-def crps_integral(obs, grid, cdf):
+def crps_integral(obs: torch.Tensor, grid:torch.Tensor , cdf: torch.Tensor) -> torch.Tensor:
+    """Evaluating the CRPS.
+    Args:
+        obs (Tensor): true observations, can be 0d or 1d tensors.
+        grid (Tensor): grid to evaluate the CRPS on.
+        cdf (Tensor): estimated cdf.
+    Returns:
+        crps_scores (Tensor): the CRPS for the estimated cdf aganist each observation.
+    """
     obs = torch.atleast_1d(obs)
     obs = obs.unsqueeze(1) # Shape: (n_sample, 1)
     sq_diff = (cdf - (grid >= obs).float()) ** 2
