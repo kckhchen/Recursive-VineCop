@@ -174,11 +174,11 @@ def train_vinecop(data: torch.Tensor,
         train_set = Subset(dataset, list(range(train_size)))
         val_set = Subset(dataset, list(range(train_size, dataset_size)))
         histories = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_set]).squeeze(1)
-        histories_u = inv_cdf_transform(histories, grid, cdf)
+        histories_unif = inv_cdf_transform(histories, grid, cdf)
 
         val_histories = torch.stack([history for history, _ in val_set]).T
         true_values = torch.stack([target for _, target in val_set])
-        val_histories_u = inv_cdf_transform(val_histories, grid, cdf)
+        val_histories_unif = inv_cdf_transform(val_histories, grid, cdf)
 
         controls = pv.FitControlsVinecop(
             family_set=[pv.gaussian, pv.student, pv.tll, pv.indep],
@@ -194,13 +194,13 @@ def train_vinecop(data: torch.Tensor,
             structure = pv.RVineStructure(order=range(1, window_size+2))
                   
         vine = pv.Vinecop.from_structure(structure)
-        vine.select(histories_u, controls=controls)
+        vine.select(histories_unif, controls=controls)
 
         crps = []
 
         for i in range(0, len(val_set)):
             true_value = true_values[-i]
-            repeated_array = np.tile(val_histories_u[:, -i], (len(cdf), 1))
+            repeated_array = np.tile(val_histories_unif[:, -i], (len(cdf), 1))
 
             den = vine.pdf(np.column_stack([repeated_array, cdf]))
             den = den / np.trapezoid(den, cdf)
