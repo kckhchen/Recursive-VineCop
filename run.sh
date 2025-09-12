@@ -14,4 +14,4 @@ python3 generate_weatherbench.py --folder "data" --name "UW_Z500" --n_samples 50
 python3 main.py --data_name "AR3" --init_dist "Normal" --init_loc 0 --init_scale 1 --init_rho 0.1
 python3 main.py --data_name "L63" --init_dist "Normal" --init_loc 0 --init_scale 1 --init_rho 0.3
 python3 main.py --data_name "L96" --component 1 --init_dist "Normal" --init_loc 0 --init_scale 1 --init_rho 0.3
-python3 main.py --data_name "UW_Z500" --init_dist "Normal" --init_loc 0 --init_scale 1 --init_rho 0.5
+python3 main.py --data_name "UW_Z500" --init_dist "Normal" --init_loc 0 --init_scale 1 --init_rho 0.3
