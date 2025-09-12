@@ -9,7 +9,6 @@ from statsmodels.tsa.stattools import acf
 import argparse
 import pyvinecopulib as pv
 from scipy.integrate import cumulative_trapezoid
-from torch.utils.data import Subset
 from utils import *
 from trainers import *
 
@@ -18,17 +17,17 @@ parser.add_argument('--data_folder', type=str, help='name of folder where data a
 parser.add_argument('--data_name', type=str, help='name of the data, only csv files are allowed', default='AR3')
 parser.add_argument('--component', type=int, help='which data component to use, only eligible for Lorenz96', default=1)
 parser.add_argument('--fig_folder', type=str, help='name of folder to store result figures', default="./results")
-parser.add_argument('--train_size', type=int, help='training data size (proportion)', default=1500)
+parser.add_argument('--train_size', type=int, help='training data size (proportion)', default=0.3)
+parser.add_argument('--val_size', type=int, help='training data size (proportion)', default=0.2)
 parser.add_argument('--init_dist', type=str, help='prior distrbution, can be Normal or Cauchy', default='Cauchy')
 parser.add_argument('--init_loc', type=float, help='initial mean for the prior', default=0.)
 parser.add_argument('--init_scale', type=float, help='initial standard deviation for the prior', default=1.)
 parser.add_argument('--init_rho', type=float, help='initial rho value for training', default=0.1)
 parser.add_argument('--set_rho', type=float, help='set rho value and skip the optimisation process')
-parser.add_argument('--train_prop', type=float, help='train-validation split for rho and vine training', default=0.7)
 parser.add_argument('--max_window', type=int, help='max window size allowed for vine copula', default=10)
 parser.add_argument('--tolerance', type=float, help='tolerance for rho optimisation early stopping', default=1e-4)
 parser.add_argument('--patience', type=int, help='patience for rho optimisation early stopping', default=5)
-parser.add_argument('--max_iter', type=int, help='max iterations for rho optimisation', default=500)
+parser.add_argument('--max_iter', type=int, help='max iterations for rho optimisation', default=100)
 parser.add_argument('--lr', type=float, help='learning rate for rho optimisation early stopping', default=0.05)
 parser.add_argument('--eta_min', type=float, help='mininum learning rate for the scheduler to decay to', default=1e-3)
 parser.add_argument('--n_lags', type=int, help='prediction lead time i.e. how many steps ahead to be predicted', default=1)
@@ -45,12 +44,12 @@ folder =  args.fig_folder
 data_name = args.data_name
 component = args.component
 train_size = args.train_size
+val_size = args.val_size
 init_dist = args.init_dist
 init_loc = args.init_loc
 init_scale = args.init_scale
 init_rho = args.init_rho
 set_rho = args.set_rho
-train_prop = args.train_prop
 max_window = args.max_window
 n_lags = args.n_lags
 trunc_lvl = args.trunc_lvl
@@ -85,21 +84,26 @@ plt.close()
 
 ## Standardisation and split
 time_series = (time_series - torch.mean(time_series)) / torch.std(time_series)
+train_val_size = int(len(time_series) * (train_size + val_size))
+train_size = int(len(time_series) * train_size)
 train_samples = time_series[:train_size]
+val_samples = time_series[train_size:train_val_size]
+train_val_samples = time_series[:train_val_size]
+test_samples = time_series[train_val_size:]
 
 ## Marginal estimation (or specifiy rho)
 if set_rho is None:
-    rho = train_rho(train_samples, init_dist, init_loc, init_scale, init_rho,
-                    args.max_iter, args.lr, args.patience, args.tolerance, args.train_prop, args.eta_min, folder, data_name)
+    rho = train_rho(train_samples, val_samples, init_dist, init_loc, init_scale, init_rho,
+                    args.max_iter, args.lr, args.patience, args.tolerance, args.eta_min, folder, data_name)
 else:
     rho = set_rho
 
-grid, trained = train_one_perm(train_samples, init_dist, init_loc, init_scale, rho)
+grid, trained = train_one_perm(train_val_samples, init_dist, init_loc, init_scale, rho)
 cdf, pdf = get_cdf_pdf(trained, grid, init_dist, init_loc, init_scale, rho)
 
 ## Marginal estimation figure
 plt.figure(figsize=(7, 5))
-plt.hist(train_samples, bins='auto', density=True, color='lightgrey', label="Observations")
+plt.hist(train_val_samples, bins='auto', density=True, color='lightgrey', label="Observations")
 plt.plot(grid, pdf, label="Estimated density")
 plt.title(f"Estimated marginal distribution with rho={rho:.3f}")
 plt.legend()
@@ -107,15 +111,13 @@ plt.savefig(folder + "/" + data_name + "_marginal.png")
 plt.close()
 
 ## vine fitting
-vine, window_size, best_crps = train_vinecop(time_series, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl, train_prop, max_window)
+vine, window_size, best_crps = train_vinecop(train_samples, val_samples, grid, cdf, pdf, n_lags, vine_structure, trunc_lvl, max_window)
 
 ## Bivariate copula fitting
-dataset = SlidingWindowDataset(time_series, window_size, steps_ahead=n_lags)
-dataset_size = len(dataset)
-train_set = Subset(dataset, list(range(train_size)))
-test_set = Subset(dataset, list(range(train_size, dataset_size)))
-test_size = len(test_set)
-train_histories_targets = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_set]).squeeze(1)
+train_dataset = SlidingWindowDataset(train_val_samples, window_size, steps_ahead=n_lags)
+test_dataset = SlidingWindowDataset(test_samples, window_size, steps_ahead=n_lags)
+test_size = len(test_dataset)
+train_histories_targets = torch.stack([torch.cat((history, target.unsqueeze(-1))) for history, target in train_dataset]).squeeze(1)
 train_histories_targets_unif = inv_cdf_transform(train_histories_targets, grid, cdf)
 bv_cop = pv.Bicop.from_data(train_histories_targets_unif[:, -2:])
 
@@ -124,8 +126,8 @@ crps = torch.zeros(3, test_size) # (vine, bv, naive)
 forecasts_vine = torch.zeros(3, test_size) # (median, upper_ci, lower_ci)
 forecasts_bv = torch.zeros(3, test_size)
 
-test_histories = torch.stack([history for history, _ in test_set]).T
-true_values = torch.stack([target for _, target in test_set])
+test_histories = torch.stack([history for history, _ in test_dataset]).T
+true_values = torch.stack([target for _, target in test_dataset])
 test_histories_unif = inv_cdf_transform(test_histories, grid, cdf)
 
 for i in range(test_size):
@@ -171,7 +173,7 @@ plt.close()
 
 ## Metrics
 forecasts_naive = grid[torch.argmin(abs(cdf - 0.5))].expand(test_size)
-forecasts_persistence = torch.cat([train_set[-1][1].reshape(1), true_values[:-1]])
+forecasts_persistence = torch.cat([train_dataset[-1][1].reshape(1), true_values[:-1]])
 rmse = torch.abs(torch.stack([forecasts_vine[0],
                               forecasts_bv[0],
                               forecasts_naive,
