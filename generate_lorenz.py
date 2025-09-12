@@ -6,14 +6,16 @@ import os
 
 parser = argparse.ArgumentParser(description='Generating Lorenz63 or Lorenz96 Datasets')
 parser.add_argument('--folder', type=str,  help='name of folder to store the data', default="./data")
-parser.add_argument('--name', type=str, help='data name, can be L63 or L96', default="L63")
+parser.add_argument('--type', type=str, help='system type, can be L63 or L96', default="L63")
+parser.add_argument('--name', type=str, help='data name', default="unnamed")
 parser.add_argument('--n_samples', type=int, help='number of samples to generates', default=5000)
 parser.add_argument('--burn_in', type=int, help='burn-in steps', default=100)
 parser.add_argument('--discard_interval', type=int, help='discard interval', default=15)
 args = parser.parse_args()
 
 folder = args.folder
-data_name = args.name
+type = args.type
+name = args.name
 n_samples= args.n_samples
 burn_in = args.burn_in
 discard_interval = args.discard_interval
@@ -129,8 +131,8 @@ def lorenz(x, y, z, s=10, r=28, b=2.667): # directly taken from Picchiardi's cod
         z_dot = x * y - b * z
         return x_dot, y_dot, z_dot
 
-assert data_name in ["L63", "L96"], "Data name not supported."
-if data_name == "L63":
+assert type in ["L63", "L96"], "Data name not supported."
+if type == "L63":
     integration_steps = (n_samples + burn_in) * discard_interval 
     dt = 0.01
 
@@ -150,10 +152,10 @@ if data_name == "L63":
         ys[i + 1] = ys[i] + (y_dot * dt)
         zs[i + 1] = zs[i] + (z_dot * dt)
 
-    timeseries = ys[::discard_interval][burn_in:].reshape(-1, 1)
-    pd.DataFrame(timeseries).to_csv(folder + "/" + data_name + ".csv")
+    timeseries = ys[::discard_interval][burn_in:-1].reshape(-1, 1)
+    pd.DataFrame(timeseries).to_csv(folder + "/" + name + ".csv")
 
-if data_name == "L96":
+if type == "L96":
     dt_integration = 0.001
     dt_observation = dt_integration * discard_interval
     K = 8  # number of observed variables
@@ -173,5 +175,5 @@ if data_name == "L96":
     timeseries, Y_out, times, steps = run_lorenz96_truth(X_init, Y_init, dt_integration, total_integration_steps,
                                                             burn_in=burn_in, skip=discard_interval, h=h, F=F, b=b,
                                                             c=c)
-    pd.DataFrame(timeseries).to_csv(folder + "/" + data_name + ".csv")
+    pd.DataFrame(timeseries).to_csv(folder + "/" + name + ".csv")
 
