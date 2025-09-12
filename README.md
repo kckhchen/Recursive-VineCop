@@ -7,7 +7,7 @@ There are four runnable Python scripts: `generate_arma.py`, `generate_lorenz.py`
 
 A `run.sh` script file is also included, which contains shell commands that can be used to conveniently generate results shown in the dissertation.
 
-`trainers.py` and `utils.py` contain background helper functions that will be called from the four Python scripts above.
+`trainers.py` and `utils.py` contain background helper functions and training processes that will be called by `main.py`.
 
 `requirements.txt` lists all dependencies for the code. The dependencies can be installed with
 ```
