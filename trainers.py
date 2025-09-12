@@ -5,7 +5,7 @@ import pyvinecopulib as pv
 from scipy.integrate import cumulative_trapezoid
 import numpy as np
 from tqdm import tqdm
-from utils import *
+from utils import train_one_perm, get_cdf_pdf, crps_integral
 
 class SlidingWindowDataset(Dataset):
     def __init__(self, data, window_size=10, steps_ahead=1):
@@ -15,6 +15,7 @@ class SlidingWindowDataset(Dataset):
     def __len__(self):
         return len(self.data) - self.window_size - self.steps_ahead + 1
     def __getitem__(self, idx):
+        if idx < 0: idx = len(self) + idx
         history = self.data[idx : idx + self.window_size]
         target = self.data[idx + self.window_size + self.steps_ahead - 1]
         return history, target
@@ -55,7 +56,7 @@ def train_rho(train_samples: np.ndarray | torch.Tensor,
               patience: int,
               tolerance: float,
               eta_min: float,
-              figpath: str,
+              fig_folder: str,
               data_name: str
               ):
     """Optimise rho for the R-BP algorithm.
@@ -71,7 +72,7 @@ def train_rho(train_samples: np.ndarray | torch.Tensor,
         patience (int): patience of the early stopper.
         tolerance (float): tolerance of the early stopper.
         eta_min (float): min rate of the scheduler.
-        figpath (str): folder for storing the loss plot.
+        fig_folder (str): folder for storing the loss plot.
         data_name (str): name of the data, for naming the loss plot.
     Returns:
         final_rho (Tensor): final optimised rho.
@@ -128,7 +129,7 @@ def train_rho(train_samples: np.ndarray | torch.Tensor,
     line2, = ax2.plot(val_loss_history, 'b-', label="Validation loss")
     ax1.set_xlabel("Iterations");ax1.set_ylabel("Training loss");ax2.set_ylabel("Validation Loss")
     plt.legend(handles=[line1, line2], loc='upper right')
-    plt.savefig(figpath + "/" + data_name + "_loss.png")
+    plt.savefig(fig_folder + "/" + data_name + "_loss.png")
     plt.close()
 
     return final_rho
@@ -205,14 +206,14 @@ def train_vinecop(train_samples: torch.Tensor,
         
         avg_crps = torch.stack(crps).mean().numpy()
 
-        if avg_crps <= best_crps and max_window <= 10:
-            print("indow_size:", window_size, "current CRPS", avg_crps)
+        if avg_crps <= best_crps and window_size <= max_window:
+            print("window_size:", window_size, "current CRPS", avg_crps)
             best_crps = avg_crps
             best_vine = vine
             opt_window_size = window_size
             window_size += 1
         else:
-            print("Optimization finished. Best window size:", window_size - 1, ". Best CRPS:", best_crps.round(5))
+            print("Optimization finished. Optimal window size:", window_size - 1, ". Best CRPS:", best_crps.round(5))
             break
 
     return best_vine, opt_window_size, best_crps.item()

@@ -9,10 +9,10 @@ from statsmodels.tsa.stattools import acf
 import argparse
 import pyvinecopulib as pv
 from scipy.integrate import cumulative_trapezoid
-from utils import *
-from trainers import *
+from utils import train_one_perm, get_cdf_pdf, crps_integral
+from trainers import SlidingWindowDataset, inv_cdf_transform, train_rho, train_vinecop
 
-parser = argparse.ArgumentParser(description='Recursive-VineCop training')
+parser = argparse.ArgumentParser(description='Recursive-VineCop Training and Testing')
 parser.add_argument('--data_folder', type=str, help='name of folder where data are stored', default="./data")
 parser.add_argument('--data_name', type=str, help='name of the data, only csv files are allowed', default='AR3')
 parser.add_argument('--component', type=int, help='which data component to use, only eligible for Lorenz96', default=1)
@@ -40,7 +40,7 @@ args = parser.parse_args()
 start_time = time.time()
 
 data_folder = args.data_folder
-folder =  args.fig_folder
+fig_folder =  args.fig_folder
 data_name = args.data_name
 component = args.component
 train_size = args.train_size
@@ -57,8 +57,8 @@ vine_structure = args.vine_structure
 ci = args.ci
 plot_length = args.plot_length
 
-if not os.path.exists(folder):
-    os.makedirs(folder)
+if not os.path.exists(fig_folder):
+    os.makedirs(fig_folder)
 
 data_path = data_folder + "/" + data_name + ".csv"
 
@@ -79,7 +79,7 @@ conf_level = 1.96 / np.sqrt(len(time_series))
 axes[1].axhline(y=conf_level, linestyle='--', color='blue', linewidth=1.2)
 axes[1].axhline(y=-conf_level, linestyle='--', color='blue', linewidth=1.2)
 plt.tight_layout()
-plt.savefig(folder + "/" + data_name + "_summary.png")
+plt.savefig(fig_folder + "/" + data_name + "_summary.png")
 plt.close()
 
 ## Standardisation and split
@@ -94,7 +94,7 @@ test_samples = time_series[train_val_size:]
 ## Marginal estimation (or specifiy rho)
 if set_rho is None:
     rho = train_rho(train_samples, val_samples, init_dist, init_loc, init_scale, init_rho,
-                    args.max_iter, args.lr, args.patience, args.tolerance, args.eta_min, folder, data_name)
+                    args.max_iter, args.lr, args.patience, args.tolerance, args.eta_min, fig_folder, data_name)
 else:
     rho = set_rho
 
@@ -107,7 +107,7 @@ plt.hist(train_val_samples, bins='auto', density=True, color='lightgrey', label=
 plt.plot(grid, pdf, label="Estimated density")
 plt.title(f"Estimated marginal distribution with rho={rho:.3f}")
 plt.legend()
-plt.savefig(folder + "/" + data_name + "_marginal.png")
+plt.savefig(fig_folder + "/" + data_name + "_marginal.png")
 plt.close()
 
 ## vine fitting
@@ -160,7 +160,7 @@ ax.fill_between(range(plot_length), *forecasts_bv[1:, :plot_length], alpha=0.3, 
 ax.fill_between(range(plot_length), *forecasts_vine[1:, :plot_length], alpha=0.4)
 plt.plot(true_values[:plot_length], '--', label="True", color='black')
 plt.legend()
-plt.savefig(folder + "/" + data_name + "_forecasts.png")
+plt.savefig(fig_folder + "/" + data_name + "_forecasts.png")
 plt.close()
 
 ## Boxplots
@@ -168,7 +168,7 @@ plt.figure(figsize=(7, 3))
 plt.boxplot(crps.T, orientation="horizontal", tick_labels=['Vine', 'Bicop', 'Naïve'])
 ax = plt.gca()
 ax.invert_yaxis()
-plt.savefig(folder + "/" + data_name + "_boxplots.png")
+plt.savefig(fig_folder + "/" + data_name + "_boxplots.png")
 plt.close()
 
 ## Metrics
