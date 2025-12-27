@@ -1,0 +1,5 @@
+results/
+test.ipynb
+.vscode/
+sandbox/
+trainers2.py
