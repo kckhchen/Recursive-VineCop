@@ -1,6 +1,6 @@
 # Recursive-VineCop
 
-This is the code for my MSc dissertation "[Online Probabilistic Weather Forecasting with Vine Copulas](https://kckhchen.com/assets/docs/msc-dissertation.pdf)", submitted in partial fulfillment of the requirements for the degree of MSc in Statistics at the University of Warwick.
+This is the code for my MSc dissertation "[Probabilistic Weather Forecasting with Recursive Algorithms and Vine Copulas](https://kckhchen.com/assets/docs/msc-dissertation.pdf)", submitted in partial fulfillment of the requirements for the degree of MSc in Statistics at the University of Warwick.
 
 ## About
 
