@@ -36,7 +36,7 @@ If you would like to cite this work or use the code in your research, you can us
 ```
 @mastersthesis{Chen2025OnlineProbabilistic,
   author  = {Kuan-Hung Chen},
-  title   = {Online Probabilistic Weather Forecasting with Vine Copulas},
+  title   = {Probabilistic Weather Forecasting with Recursive Algorithms and Vine Copulas},
   school  = {University of Warwick},
   year    = {2024}
 }
